@@ -108,8 +108,6 @@ bool checkCommand(USER_DATA data)
 
                 valid = true;
                 start=0;
-
-                displayUart0("DATA TRANSMIT TURNED OFF\n\r");
                 return valid;
             }
         if (isCommand(&data, "get", 1))
@@ -265,28 +263,30 @@ void Timer1Isr()
        //
         if (phase==0)
             {
-            GPIO_PORTB_DATA_R=1;
+                GPIO_PORTB_DATA_R=0x00000002;
                 TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
                 TIMER1_TAILR_R=480 ;
                 TIMER1_CTL_R |= TIMER_CTL_TAEN;
-
 
                 phase = 1;
             }
 
         else if (phase==1)
             {
-                //TIMER1_CTL_R |= TIMER_CTL_TAEN;
-                //TIMER1_TAILR_R= 227272727272.7273;
+
+
                 TIMER1_IMR_R &= ~TIMER_IMR_TATOIM;
                 TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
                 TIMER1_TAILR_R= 7040;
+
                 GPIO_PORTB_AFSEL_R |= (UART1_TX_MASK | UART1_RX_MASK);
                // GPIO_PORTB_PCTL_R &= ~(GPIO_PCTL_PB1_M | GPIO_PCTL_PB0_M);
                 GPIO_PORTB_PCTL_R |= (GPIO_PCTL_PB1_U1TX | GPIO_PCTL_PB0_U1RX);
                 UART1_DR_R = 0;
+
                 UART1_IM_R |= UART_IM_TXIM;
                 phase = 2;
+
             }
 
         TIMER1_ICR_R = TIMER_ICR_TATOCINT;
@@ -309,12 +309,18 @@ void UART1ISR()
            while (UART1_FR_R & UART_FR_BUSY);
            if (start==1)
            {
-
                //DE=0;
                startDMXTX();
            }
+           else if(start==0)
+           {
+               displayUart0("doneee");
+               UART1_IM_R &= ~UART_IM_TXIM;
+
+           }
 
        }
+
 
 
 }
@@ -324,8 +330,10 @@ void startDMXTX()
     DE=1;
     GPIO_PORTB_DATA_R=0; //Break
     phase=0;
-    TIMER1_CTL_R |= TIMER_CTL_TAEN;
+    TIMER1_TAILR_R=7040 ;
 
+    TIMER1_CTL_R |= TIMER_CTL_TAEN;
+    TIMER1_IMR_R = TIMER_IMR_TATOIM;
 
 
     //TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
