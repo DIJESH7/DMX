@@ -28,6 +28,7 @@
 #include "uart0.h"
 #include "uart_input.h"
 #include "uart1.h"
+#include "eeprom.h"
 #define DE (*((volatile uint32_t *)(0x42000000 + (0x400063FC-0x40000000)*32 + 7*4)))
 
 
@@ -41,7 +42,8 @@ uint32_t phase=0;
 uint32_t max_add=512;
 uint32_t DATA[512];
 uint32_t start=0;
-
+uint16_t Mode=0x01;
+uint16_t Address =0x02;
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
@@ -95,13 +97,23 @@ bool checkCommand(USER_DATA data)
 
                 valid = true;
                start=1;
-                //displayUart0("DATA TRANSMIT TURNED ON\n\r");
                 startDMXTX();
-                //TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
-
                 return valid;
             }
 
+        if(isCommand(&data,"controller",0))
+        {
+            valid=true;
+            writeEeprom(Mode,0x01);
+        }
+
+        if(isCommand(&data,"device",1))
+        {
+            uint32_t add= getFieldInteger(&data,1);
+            valid=true;
+            writeEeprom(Mode,0xFFFFFFFF);
+            writeEeprom(Address,add);
+        }
 
         if (isCommand(&data, "off", 0))
             {
@@ -141,68 +153,7 @@ bool checkCommand(USER_DATA data)
             return valid;
         }
 
-        if (isCommand(&data, "tx_on", 0))
-        {
-            char* str = getFieldString(&data, 1);
-            valid = true;
-            displayUart0("Transmit on\n\r");
-            return valid;
-        }
 
-        if (isCommand(&data, "tx_off", 0))
-        {
-            char* str = getFieldString(&data, 1);
-            valid = true;
-            displayUart0("Transmit off\n\r");
-            return valid;
-        }
-
-        if (isCommand(&data, "requestpoll", 1))
-        {
-            char* str = getFieldString(&data, 1);
-            valid = true;
-            displayUart0("poll requested\n\r");
-            return valid;
-        }
-
-        if (isCommand(&data, "set_time", 3))
-        {
-            int32_t hour = getFieldInteger(&data, 1);
-            int32_t minute = getFieldInteger(&data, 2);
-            int32_t second = getFieldInteger(&data, 3);
-            valid = true;
-            int32_t total= hour+minute+second;
-            displayUart0("Time Set  \n\r");
-            return valid;
-        }
-
-        if (isCommand(&data, "get_time", 3))
-        {
-            int32_t hour = getFieldInteger(&data, 1);
-            int32_t minute = getFieldInteger(&data, 2);
-            int32_t second = getFieldInteger(&data, 3);
-            valid = true;
-            displayUart0("Got Time\n\r");
-            return valid;
-        }
-
-        if (isCommand(&data, "set_date", 2))
-        {
-            int32_t month = getFieldInteger(&data, 1);
-            int32_t day = getFieldInteger(&data, 2);
-            valid = true;
-            displayUart0("Date Set\n\r");
-            return valid;
-        }
-
-        if (isCommand(&data, "get_date", 2))
-        {
-            int32_t month = getFieldInteger(&data, 1);
-            int32_t day = getFieldInteger(&data, 2);
-            valid = true;
-            displayUart0("Got date\n\r");
-            return valid;
-        }
 
         if (!valid)
         {
@@ -298,7 +249,6 @@ void UART1ISR()
        {
            while (UART1_FR_R & UART_FR_TXFF);
            UART1_DR_R=DATA[phase-2];
-           //displayUart0("ok ");
            phase++;
        }
        else if((phase-2)==max_add)
@@ -314,7 +264,6 @@ void UART1ISR()
            }
            else if(start==0)
            {
-               displayUart0("doneee");
                UART1_IM_R &= ~UART_IM_TXIM;
 
            }
@@ -351,9 +300,36 @@ int main(void)
     initHw();
     initUart0();
     initUart1();
+    initEeprom();
+   // writeEeprom(0xFFFFFFFF,2);
 
+    //putsUart0(value);
+
+
+    if (readEeprom(Mode)==0xFFFFFFFF)
+    {
+        if(readEeprom(Address)==0xFFFFFFFF)
+        {
+            Address=0x02;
+
+        }
+        else if(readEeprom(Address)!=0xFFFFFFFF)
+        {
+            writeEeprom(Address,readEeprom(Address));
+        }
+
+    }
+    if (readEeprom(Mode)!=0xFFFFFFFF)
+        {
+        start=1;
+        startDMXTX();
+
+        }
+    //writeEeprom(0x01,0xFFFFFFFF);
+    //value=readEeprom(0x01);
     while(1)
     {
+
     // Get the string from the user
     getsUart0(&data);
 
@@ -371,6 +347,6 @@ int main(void)
     bool valid=false;
     valid=checkCommand(data);
     }
-    while (true);
+   // while (true);
     return 0;
 }
