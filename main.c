@@ -40,13 +40,18 @@ uint32_t BUFFER_LENGTH = 100;
 char chartxBuffer[100];
 uint32_t phase = 0;
 uint32_t rx_phase = 0;
-uint32_t max_add = 513;
-uint8_t DATA[512];
+uint32_t max_add = 515;
+uint32_t DATA[512];
 uint32_t start = 0;
 uint16_t Mode = 0x01;
 uint16_t Address = 0x0;
 bool state = false;
 uint32_t data = 0;
+uint32_t LED_TIMEOUT_OFF = 10;
+uint32_t LED_TIMEOUT_ON = 0;
+uint32_t LED_BLUE = 0;
+uint32_t LED_GREEN = 0;
+uint32_t LED_RED = 0;
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
@@ -63,7 +68,7 @@ void initHw()
 
     // Enable clocks
     SYSCTL_RCGCGPIO_R = SYSCTL_RCGCGPIO_R5 | SYSCTL_RCGCGPIO_R2;
-    SYSCTL_RCGCTIMER_R |= SYSCTL_RCGCTIMER_R1;
+    SYSCTL_RCGCTIMER_R |= (SYSCTL_RCGCTIMER_R1 | SYSCTL_RCGCTIMER_R2);
 
     _delay_cycles(3);
 
@@ -79,6 +84,15 @@ void initHw()
     NVIC_EN0_R |= 1 << (INT_TIMER1A - 16);     // turn-on interrupt 37 (TIMER1A)
     //TIMER2_CTL_R |= TIMER_CTL_TAEN;                  // turn-on time
 
+    TIMER2_CTL_R &= ~TIMER_CTL_TAEN;      // turn-off timer before reconfiguring
+    TIMER2_CFG_R = TIMER_CFG_32_BIT_TIMER;    // configure as 32-bit timer (A+B)
+    TIMER2_TAMR_R = TIMER_TAMR_TAMR_PERIOD; // configure for periodic mode (count down)
+    TIMER2_TAILR_R = 4000000;  // set load value to 40e6 for 1 Hz interrupt rate
+    //TIMER2_IMR_R = TIMER_IMR_TATOIM;
+    // turn-on interrupts
+    NVIC_EN0_R |= 1 << (INT_TIMER2A - 16);     // turn-on interrupt 37 (TIMER1A)
+    //TIMER2_CTL_R |= TIMER_CTL_TAEN;                  // turn-on time
+
 }
 
 bool checkCommand(USER_DATA data)
@@ -88,6 +102,12 @@ bool checkCommand(USER_DATA data)
     {
         int32_t add = getFieldInteger(&data, 1);
         int32_t Data = getFieldInteger(&data, 2);
+        PWM1_3_CMPB_R = 250;
+        LED_TIMEOUT_OFF = 10;
+        LED_GREEN = 1;
+        TIMER2_TAILR_R = 4000000;
+        TIMER2_IMR_R = TIMER_IMR_TATOIM;
+        TIMER2_CTL_R |= TIMER_CTL_TAEN;
 
         DATA[add] = Data;
         //displayUart0("table updated\n\r");
@@ -100,7 +120,7 @@ bool checkCommand(USER_DATA data)
 
         valid = true;
         start = 1;
-
+        PWM1_2_CMPB_R = 250;
         startDMXTX();
         return valid;
     }
@@ -117,10 +137,10 @@ bool checkCommand(USER_DATA data)
         valid = true;
         writeEeprom(Mode, 0xFFFFFFFF);
         //writeEeprom(Address, add);
-        Address= add;
+        Address = add;
         uint32_t a = readEeprom(Address);
         char str[50];
-        sprintf(str,"%u",a);
+        sprintf(str, "%u", a);
         displayUart0(str);
     }
 
@@ -136,9 +156,9 @@ bool checkCommand(USER_DATA data)
     if (isCommand(&data, "get", 1))
     {
         int32_t add = getFieldInteger(&data, 1);
-        uint32_t value = DATA[add];
+        uint32_t value = DATA[add+1];
         char str[16];
-        sprintf(str, " %u", DATA[add]);
+        sprintf(str, " %u", value);
         displayUart0(str);
         valid = true;
         displayUart0("retrieve from table\n\r");
@@ -215,28 +235,43 @@ void displayUart0(char str[])
 
 }
 
-
 void UART1ISR()
 {
     //step 8
     if (UART1_MIS_R & UART_MIS_RXMIS)
     {
+        //if (UART1_RSR_R&UART_RSR_BE)
+        //{
+          //  displayUart0("u");
+        //}
         data = UART1_DR_R;
-        if (data & UART_DR_BE)
+        if (UART1_DR_R & UART_DR_BE)
         {
+           //char str[20];
+            //sprintf(str,"%u",rx_phase);
+            //displayUart0(str);
             rx_phase = 0;
-            PWM1_2_CMPB_R = DATA[Address];
             PWM1_3_CMPA_R = DATA[Address+1];
-            PWM1_3_CMPB_R = DATA[Address+2];
+           /* PWM1_2_CMPB_R = 250;
+            LED_TIMEOUT_OFF = 10;
+            LED_RED = 1;
+            TIMER2_TAILR_R = 4000000;
+            TIMER2_IMR_R = TIMER_IMR_TATOIM;
+            TIMER2_CTL_R |= TIMER_CTL_TAEN;
+*/
+             PWM1_2_CMPB_R = DATA[Address];
+            //PWM1_3_CMPA_R = DATA[Address + 1];
+            PWM1_3_CMPB_R = DATA[Address + 2];
         }
         else
         {
-            DATA[rx_phase] = (data<<4);
+            DATA[rx_phase] = (data);
             rx_phase++;
-            if (rx_phase==550)
-            {
-                displayUart0("dd");
-            }
+           // if (rx_phase==515)
+            //{
+              //  displayUart0("dd");
+            //}
+
         }
     }
 
@@ -252,10 +287,12 @@ void UART1ISR()
         }
         else if ((phase - 2) == max_add)
         {
+
             UART1_IM_R &= ~UART_IM_TXIM;
             GPIO_PORTB_AFSEL_R &= ~(UART1_TX_MASK | UART1_RX_MASK);
             GPIO_PORTB_PCTL_R &= ~(GPIO_PCTL_PB1_M | GPIO_PCTL_PB0_M);
-            while (UART1_FR_R & UART_FR_BUSY);
+            while (UART1_FR_R & UART_FR_BUSY)
+                ;
             if (start == 1)
             {
                 startDMXTX();
@@ -289,12 +326,12 @@ void Timer1Isr()
         TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
         TIMER1_TAILR_R = 7040;
 
-        GPIO_PORTB_AFSEL_R |= (UART1_TX_MASK | UART1_RX_MASK);
-        GPIO_PORTB_PCTL_R |= (GPIO_PCTL_PB1_U1TX | GPIO_PCTL_PB0_U1RX);
+        GPIO_PORTB_AFSEL_R |= UART1_TX_MASK;
+        GPIO_PORTB_PCTL_R |= GPIO_PCTL_PB1_U1TX ;
         UART1_DR_R = 0;
-
-        UART1_IM_R |= UART_IM_TXIM;
         phase = 2;
+        UART1_IM_R |= UART_IM_TXIM;
+
     }
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
@@ -309,6 +346,38 @@ void startDMXTX()
     TIMER1_CTL_R |= TIMER_CTL_TAEN;
     TIMER1_IMR_R = TIMER_IMR_TATOIM;
 }
+void Timer2Isr()
+{
+
+    if (LED_TIMEOUT_OFF > 0)
+    {
+        LED_TIMEOUT_OFF--;
+
+    }
+    else if (LED_TIMEOUT_OFF == 0 && LED_BLUE)
+    {
+        PWM1_3_CMPA_R = 0;
+        LED_BLUE = 0;
+        // TIMER2_IMR_R &= ~TIMER_IMR_TATOIM;
+        //TIMER2_CTL_R &= ~TIMER_CTL_TAEN;
+    }
+    else if (LED_TIMEOUT_OFF == 0 && LED_RED)
+    {
+        PWM1_2_CMPB_R = 0;
+        LED_RED = 0;
+        // TIMER2_IMR_R &= ~TIMER_IMR_TATOIM;
+        //TIMER2_CTL_R &= ~TIMER_CTL_TAEN;
+    }
+    else if (LED_TIMEOUT_OFF == 0 && LED_GREEN)
+    {
+        PWM1_3_CMPB_R = 0;
+        LED_GREEN = 0;
+        // TIMER2_IMR_R &= ~TIMER_IMR_TATOIM;
+        //TIMER2_CTL_R &= ~TIMER_CTL_TAEN;
+    }
+
+    TIMER2_ICR_R = TIMER_ICR_TATOCINT;
+}
 
 //-----------------------------------------------------------------------------
 // Main
@@ -322,6 +391,7 @@ int main(void)
     initUart0();
     initUart1();
     initEeprom();
+
     if (readEeprom(Mode) == 0xFFFFFFFF) //Device
     {
         if (readEeprom(Address) == 0xFFFFFFFF)
@@ -337,44 +407,53 @@ int main(void)
 
         state = true;
         initBacklight();
-        GPIO_PORTB_AFSEL_R |=  UART1_RX_MASK;
-        GPIO_PORTB_PCTL_R |=  GPIO_PCTL_PB0_U1RX;
+        PWM1_2_CMPB_R = 0;
+        GPIO_PORTB_AFSEL_R |= UART1_RX_MASK;
+        GPIO_PORTB_PCTL_R |= GPIO_PCTL_PB0_U1RX;
         UART1_IM_R |= UART_IM_RXIM;
     }
 
     if (readEeprom(Mode) != 0xFFFFFFFF) //Controller
     {
         initBacklight();
-        state=false;
+        state = false;
         start = 1;
         PWM1_2_CMPB_R = 250;
+        //TIMER2_TAILR_R = 40000000;
+        //TIMER2_CTL_R |= TIMER_CTL_TAEN;
+        //TIMER2_IMR_R = TIMER_IMR_TATOIM;
         startDMXTX();
     }
     while (1)
-   {
+    {
 
+        //setBacklightRgbColor(0,200,0);
 
-                                   //setBacklightRgbColor(0,200,0);
+        //waitMicrosecond(10000000);
+        // Get the string from the user
+        getsUart0(&data);
+        PWM1_3_CMPA_R = 250;
+        LED_TIMEOUT_OFF = 10;
+        LED_BLUE = 1;
+        TIMER2_TAILR_R = 4000000;
+        TIMER2_IMR_R = TIMER_IMR_TATOIM;
+        TIMER2_CTL_R |= TIMER_CTL_TAEN;
 
-                                   //waitMicrosecond(10000000);
-                                   // Get the string from the user
-                                   getsUart0(&data);
-                                   PWM1_3_CMPA_R = 250;
-                                   // Echo back to the user of the TTY interface for testing
-                                   putsUart0(data.buffer);
+        // Echo back to the user of the TTY interface for testing
+        putsUart0(data.buffer);
 
-                                   // Parse fields
-                                   parseFields(&data);
+        // Parse fields
+        parseFields(&data);
 
-                                   // Echo back the parsed field information (type and fields)
+        // Echo back the parsed field information (type and fields)
 
-                                   putcUart0('\n');
-                                   putcUart0('\r');
+        putcUart0('\n');
+        putcUart0('\r');
+        //PWM1_2_CMPB_R = 250;
 
-                                   bool valid = false;
-                                   valid = checkCommand(data);
- }
-
+        bool valid = false;
+        valid = checkCommand(data);
+    }
 
     // while (true);
     return 0;
