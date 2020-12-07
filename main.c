@@ -42,7 +42,7 @@ uint32_t BUFFER_LENGTH = 100;
 char chartxBuffer[100];
 uint32_t phase = 0;
 uint32_t rx_phase = 0;
-uint32_t max_add = 515;
+uint32_t max_add = 514;
 uint32_t DATA[512];
 uint32_t start = 0;
 uint16_t Mode = 0x01;
@@ -57,11 +57,20 @@ uint32_t LED_RED = 0;
 bool poll_request = false;
 uint32_t current_time = 32400; //9 o'clock in the morning
 
-uint32_t month = 2;
-uint32_t date = 5;
+uint32_t month = 0;
+uint32_t date = 0;
 uint32_t hr = 0;
 uint32_t min = 0;
 uint32_t sec = 0;
+uint32_t alarm_time = 0;
+uint32_t alarm_table[512][3];
+uint32_t i = 0;
+uint32_t j = 0;
+uint32_t t = 0;
+uint32_t current = 0;
+uint32_t k = 0;
+uint32_t soonest = 0;
+//uint32_t current_hms = sec + 60 * (min + 60 * (hr));
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
@@ -79,7 +88,7 @@ void initHw()
     // Enable clocks
     SYSCTL_RCGCGPIO_R = SYSCTL_RCGCGPIO_R5 | SYSCTL_RCGCGPIO_R2;
     SYSCTL_RCGCTIMER_R |= (SYSCTL_RCGCTIMER_R1 | SYSCTL_RCGCTIMER_R2);
-
+    SYSCTL_RCGCHIB_R = SYSCTL_RCGCHIB_R0;
     _delay_cycles(3);
 
     GPIO_PORTC_DIR_R |= DE_MASK;
@@ -106,15 +115,19 @@ void initHw()
 }
 void initHIB()
 {
-    SYSCTL_RCGCHIB_R = SYSCTL_RCGCHIB_R0;
-    HIB_IM_R = HIB_IM_WC;
+
+
     HIB_CTL_R |= HIB_CTL_CLK32EN;
-    while (!(HIB_MIS_R |= HIB_MIS_WC))
-        ;
+    while (!(HIB_CTL_R & HIB_CTL_WRC))
+        HIB_IM_R |= HIB_IM_RTCALT0;
+
+    while (!(HIB_CTL_R & HIB_CTL_WRC));
+    NVIC_EN1_R |= 1 << (INT_HIBERNATE - 16 - 32);
     while (!(HIB_CTL_R & 0x80000000))
         ;
-    //HIB_RTCLD_R = 43200;
-    HIB_CTL_R |= HIB_CTL_RTCEN;
+    while (!(HIB_CTL_R & HIB_CTL_WRC));
+           HIB_RTCM0_R = alarm_table[soonest][0];
+    HIB_CTL_R |= 0X00000041;
 }
 
 bool checkCommand(USER_DATA data)
@@ -131,7 +144,42 @@ bool checkCommand(USER_DATA data)
         TIMER2_IMR_R = TIMER_IMR_TATOIM;
         TIMER2_CTL_R |= TIMER_CTL_TAEN;
 
-        DATA[add] = Data;
+        DATA[add - 1] = Data;
+        //displayUart0("table updated\n\r");
+        valid = true;
+        return valid;
+    }
+    if (isCommand(&data, "set", 7))
+    {
+        int32_t add = getFieldInteger(&data, 1);
+        int32_t value = getFieldInteger(&data, 2);
+        int32_t hour = getFieldInteger(&data, 3);
+        int32_t minute = getFieldInteger(&data, 4);
+        int32_t second = getFieldInteger(&data, 5);
+        int32_t mon = getFieldInteger(&data, 6);
+        int32_t day = getFieldInteger(&data, 7);
+        alarm_time = second
+                + 60 * (minute + 60 * (hour + 24 * (mon * 30 + day)));
+
+        alarm_table[current][0] = alarm_time;
+        alarm_table[current][1] = add;
+        alarm_table[current][2] = value;
+        soonest=current;
+        current++;
+
+        for (i = 0; i < current; i++)
+            for (j = current; j > i; j--)
+                if (alarm_table[j - 1][0] < alarm_table[j][0])
+                {
+                    for (k = 0; k < 3; k++)
+                    {
+                        // Swap all columns
+                        t = alarm_table[j - 1][k];
+                        alarm_table[j - 1][k] = alarm_table[j][k];
+                        alarm_table[j][k] = t;
+                    }
+                }
+
         //displayUart0("table updated\n\r");
         valid = true;
         return valid;
@@ -178,7 +226,7 @@ bool checkCommand(USER_DATA data)
     if (isCommand(&data, "get", 1))
     {
         int32_t add = getFieldInteger(&data, 1);
-        uint32_t value = DATA[add + 1];
+        uint32_t value = DATA[add];
         char str[16];
         sprintf(str, " %u", value);
         displayUart0(str);
@@ -223,8 +271,11 @@ bool checkCommand(USER_DATA data)
         sec = getFieldInteger(&data, 3);
 
         current_time = sec + 60 * (min + 60 * (hr + 24 * (month * 30 + date)));
+        while(!(HIB_CTL_R &HIB_CTL_WRC));
         HIB_RTCLD_R = current_time;
         valid = true;
+
+
 
         displayUart0("Time set\n\r");
         return valid;
@@ -255,6 +306,7 @@ bool checkCommand(USER_DATA data)
         displayUart0(sec1);
         valid = true;
         displayUart0("\n\r Time displayed \n\r");
+
         return valid;
     }
 
@@ -282,12 +334,12 @@ bool checkCommand(USER_DATA data)
         sprintf(date1, " %u", date);
         displayUart0(date1);
 
-
         valid = true;
 
         displayUart0("Date displayed\n\r");
         return valid;
     }
+
     if (!valid)
     {
         displayUart0("Invalid command\n\r");
@@ -296,6 +348,27 @@ bool checkCommand(USER_DATA data)
     return valid;
 }
 
+void alarmIsr()
+{
+    displayUart0("done");
+
+    if (HIB_RTCC_R == HIB_RTCM0_R)
+    {
+
+        DATA[(alarm_table[soonest][1]) - 1] = alarm_table[soonest][2];
+        if (soonest > 0)
+        {
+            soonest--;
+            current--;
+        }
+        else
+        {
+            soonest = 0;
+        }
+    }
+
+    HIB_IC_R |= (HIB_IC_RTCALT0 | HIB_IC_WC);
+}
 void UART0ISR()
 {
     if (UART0_FR_R & UART_FR_TXFE)
@@ -340,7 +413,7 @@ void displayUart0(char str[])
 
 void UART1ISR()
 {
-    //step 8
+//step 8
     if (UART1_MIS_R & UART_MIS_RXMIS)
     {
         //if (UART1_RSR_R&UART_RSR_BE)
@@ -352,7 +425,7 @@ void UART1ISR()
         {
 
             rx_phase = 0;
-            PWM1_3_CMPA_R = DATA[Address + 1];
+            PWM1_3_CMPA_R = DATA[Address];
             /* PWM1_2_CMPB_R = 250;
              LED_TIMEOUT_OFF = 10;
              LED_RED = 1;
@@ -360,9 +433,9 @@ void UART1ISR()
              TIMER2_IMR_R = TIMER_IMR_TATOIM;
              TIMER2_CTL_R |= TIMER_CTL_TAEN;
              */
-            PWM1_2_CMPB_R = DATA[Address];
+            PWM1_2_CMPB_R = DATA[Address - 1];
 
-            PWM1_3_CMPB_R = DATA[Address + 2];
+            PWM1_3_CMPB_R = DATA[Address + 1];
         }
         else
         {
@@ -372,7 +445,7 @@ void UART1ISR()
         }
     }
 
-    //step 6
+//step 6
 
     if (UART1_MIS_R & UART_MIS_TXMIS)
     {
@@ -530,6 +603,7 @@ int main(void)
     initUart1();
     initEeprom();
     initHIB();
+
     if (readEeprom(Mode) == 0xFFFFFFFF) //Device
     {
         if (readEeprom(Address) == 0xFFFFFFFF)
@@ -593,6 +667,6 @@ int main(void)
         valid = checkCommand(data);
     }
 
-    // while (true);
+// while (true);
     return 0;
 }
