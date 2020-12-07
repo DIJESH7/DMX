@@ -22,6 +22,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
+#include <float.h>
 
 #include "tm4c123gh6pm.h"
 #include "uart0.h"
@@ -52,6 +54,14 @@ uint32_t LED_TIMEOUT_ON = 0;
 uint32_t LED_BLUE = 0;
 uint32_t LED_GREEN = 0;
 uint32_t LED_RED = 0;
+bool poll_request = false;
+uint32_t current_time = 32400; //9 o'clock in the morning
+
+uint32_t month = 2;
+uint32_t date = 5;
+uint32_t hr = 0;
+uint32_t min = 0;
+uint32_t sec = 0;
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
@@ -93,6 +103,18 @@ void initHw()
     NVIC_EN0_R |= 1 << (INT_TIMER2A - 16);     // turn-on interrupt 37 (TIMER1A)
     //TIMER2_CTL_R |= TIMER_CTL_TAEN;                  // turn-on time
 
+}
+void initHIB()
+{
+    SYSCTL_RCGCHIB_R = SYSCTL_RCGCHIB_R0;
+    HIB_IM_R = HIB_IM_WC;
+    HIB_CTL_R |= HIB_CTL_CLK32EN;
+    while (!(HIB_MIS_R |= HIB_MIS_WC))
+        ;
+    while (!(HIB_CTL_R & 0x80000000))
+        ;
+    //HIB_RTCLD_R = 43200;
+    HIB_CTL_R |= HIB_CTL_RTCEN;
 }
 
 bool checkCommand(USER_DATA data)
@@ -156,7 +178,7 @@ bool checkCommand(USER_DATA data)
     if (isCommand(&data, "get", 1))
     {
         int32_t add = getFieldInteger(&data, 1);
-        uint32_t value = DATA[add+1];
+        uint32_t value = DATA[add + 1];
         char str[16];
         sprintf(str, " %u", value);
         displayUart0(str);
@@ -177,14 +199,95 @@ bool checkCommand(USER_DATA data)
         return valid;
     }
 
-    if (isCommand(&data, "max_add", 1))
+    if (isCommand(&data, "max", 1))
     {
-        char *str = getFieldString(&data, 1);
+        int32_t max = getFieldInteger(&data, 1);
+        max_add = max + 2;
         valid = true;
         displayUart0("set max variable\n\r");
         return valid;
     }
 
+    if (isCommand(&data, "poll", 0))
+    {
+        poll_request = true;
+        valid = true;
+        startDMXTX();
+        displayUart0("Poll Requested\n\r");
+        return valid;
+    }
+    if (isCommand(&data, "time", 3))
+    {
+        hr = getFieldInteger(&data, 1);
+        min = getFieldInteger(&data, 2);
+        sec = getFieldInteger(&data, 3);
+
+        current_time = sec + 60 * (min + 60 * (hr + 24 * (month * 30 + date)));
+        HIB_RTCLD_R = current_time;
+        valid = true;
+
+        displayUart0("Time set\n\r");
+        return valid;
+    }
+    if (isCommand(&data, "time", 0))
+    {
+        current_time = HIB_RTCC_R;
+        month = current_time / (60 * 60 * 24 * 30);
+        date = (current_time / (60 * 60 * 24)) - (month * 30);
+        float Total_hr = 0.0;
+        Total_hr = ((float) current_time / (60 * 60));
+        uint32_t int_hr = Total_hr;
+        hr = int_hr - (((month * 30) + date) * 24);
+        float hr_dec = (float) int_hr - Total_hr;
+        min = (-hr_dec) * 60;
+        //min1 = (current_time / (60)) - (month * (60 * 60 * 24 * 30)) - (date * (60 * 60 * 24)) - (hr * 60);
+        sec = (current_time) - (month * (60 * 60 * 24 * 30))
+                - (date * (60 * 60 * 24)) - (hr * 60 * 60) - (min * 60);
+        // uint32_t time_hms=current_time-
+        char hr1[16];
+        sprintf(hr1, " %u", hr);
+        displayUart0(hr1);
+        char min1[16];
+        sprintf(min1, " %u", min);
+        displayUart0(min1);
+        char sec1[16];
+        sprintf(sec1, " %u", sec);
+        displayUart0(sec1);
+        valid = true;
+        displayUart0("\n\r Time displayed \n\r");
+        return valid;
+    }
+
+    if (isCommand(&data, "date", 2))
+    {
+        month = getFieldInteger(&data, 1);
+        date = getFieldInteger(&data, 2);
+        current_time = sec + 60 * (min + 60 * (hr + 24 * (month * 30 + date)));
+        HIB_RTCLD_R = current_time;
+        valid = true;
+
+        displayUart0("Date set\n\r");
+        return valid;
+    }
+    if (isCommand(&data, "date", 0))
+    {
+
+        current_time = HIB_RTCC_R;
+        month = current_time / (60 * 60 * 24 * 30);
+        date = (current_time / (60 * 60 * 24)) - (month * 30);
+        char month1[16];
+        sprintf(month1, " %u", month);
+        displayUart0(month1);
+        char date1[16];
+        sprintf(date1, " %u", date);
+        displayUart0(date1);
+
+
+        valid = true;
+
+        displayUart0("Date displayed\n\r");
+        return valid;
+    }
     if (!valid)
     {
         displayUart0("Invalid command\n\r");
@@ -242,109 +345,144 @@ void UART1ISR()
     {
         //if (UART1_RSR_R&UART_RSR_BE)
         //{
-          //  displayUart0("u");
+        //  displayUart0("u");
         //}
         data = UART1_DR_R;
         if (UART1_DR_R & UART_DR_BE)
         {
-           //char str[20];
-            //sprintf(str,"%u",rx_phase);
-            //displayUart0(str);
+
             rx_phase = 0;
-            PWM1_3_CMPA_R = DATA[Address+1];
-           /* PWM1_2_CMPB_R = 250;
-            LED_TIMEOUT_OFF = 10;
-            LED_RED = 1;
-            TIMER2_TAILR_R = 4000000;
-            TIMER2_IMR_R = TIMER_IMR_TATOIM;
-            TIMER2_CTL_R |= TIMER_CTL_TAEN;
-*/
-             PWM1_2_CMPB_R = DATA[Address];
-            //PWM1_3_CMPA_R = DATA[Address + 1];
+            PWM1_3_CMPA_R = DATA[Address + 1];
+            /* PWM1_2_CMPB_R = 250;
+             LED_TIMEOUT_OFF = 10;
+             LED_RED = 1;
+             TIMER2_TAILR_R = 4000000;
+             TIMER2_IMR_R = TIMER_IMR_TATOIM;
+             TIMER2_CTL_R |= TIMER_CTL_TAEN;
+             */
+            PWM1_2_CMPB_R = DATA[Address];
+
             PWM1_3_CMPB_R = DATA[Address + 2];
         }
         else
         {
             DATA[rx_phase] = (data);
             rx_phase++;
-           // if (rx_phase==515)
-            //{
-              //  displayUart0("dd");
-            //}
 
         }
     }
 
     //step 6
+
     if (UART1_MIS_R & UART_MIS_TXMIS)
     {
-        if ((phase - 2) < max_add)
+        if (!(poll_request))
         {
-            while (UART1_FR_R & UART_FR_TXFF)
-                ;
-            UART1_DR_R = DATA[phase - 2];
-            phase++;
-        }
-        else if ((phase - 2) == max_add)
-        {
-
-            UART1_IM_R &= ~UART_IM_TXIM;
-            GPIO_PORTB_AFSEL_R &= ~(UART1_TX_MASK | UART1_RX_MASK);
-            GPIO_PORTB_PCTL_R &= ~(GPIO_PCTL_PB1_M | GPIO_PCTL_PB0_M);
-            while (UART1_FR_R & UART_FR_BUSY)
-                ;
-            if (start == 1)
+            if ((phase - 2) < max_add)
             {
-                startDMXTX();
+                while (UART1_FR_R & UART_FR_TXFF)
+                    ;
+                UART1_DR_R = DATA[phase - 2];
+                phase++;
             }
-            else if (start == 0)
+            else if ((phase - 2) == max_add)
             {
+
                 UART1_IM_R &= ~UART_IM_TXIM;
+                GPIO_PORTB_AFSEL_R &= ~(UART1_TX_MASK | UART1_RX_MASK);
+                GPIO_PORTB_PCTL_R &= ~(GPIO_PCTL_PB1_M | GPIO_PCTL_PB0_M);
+                while (UART1_FR_R & UART_FR_BUSY)
+                    ;
+                if (start == 1)
+                {
+                    startDMXTX();
+                }
+                else if (start == 0)
+                {
+                    UART1_IM_R &= ~UART_IM_TXIM;
+
+                }
 
             }
+        }
+
+        if (poll_request)
+        {
 
         }
+
     }
 }
 
 void Timer1Isr()
 {
-
-    if (phase == 0)
+    if (poll_request) //polling
     {
-        GPIO_PORTB_DATA_R = 0x00000002;
-        TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
-        TIMER1_TAILR_R = 480;
-        TIMER1_CTL_R |= TIMER_CTL_TAEN;
+        if (phase == 0)
+        {
+            GPIO_PORTB_DATA_R = 0x00000002;
+            TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
+            TIMER1_TAILR_R = 480;
+            TIMER1_CTL_R |= TIMER_CTL_TAEN;
+            phase = 1;
+        }
 
-        phase = 1;
+        else if (phase == 1)
+        {
+            TIMER1_IMR_R &= ~TIMER_IMR_TATOIM;
+            TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
+            TIMER1_TAILR_R = 7040;
+
+            GPIO_PORTB_AFSEL_R |= UART1_TX_MASK;
+            GPIO_PORTB_PCTL_R |= GPIO_PCTL_PB1_U1TX;
+            UART1_DR_R = 0xF7;
+            phase = 2;
+            UART1_IM_R |= UART_IM_TXIM;
+
+        }
+        TIMER1_ICR_R = TIMER_ICR_TATOCINT;
     }
 
-    else if (phase == 1)
+    if (!(poll_request))
     {
-        TIMER1_IMR_R &= ~TIMER_IMR_TATOIM;
-        TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
-        TIMER1_TAILR_R = 7040;
+        if (phase == 0)
+        {
+            GPIO_PORTB_DATA_R = 0x00000002;
+            TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
+            TIMER1_TAILR_R = 480;
+            TIMER1_CTL_R |= TIMER_CTL_TAEN;
 
-        GPIO_PORTB_AFSEL_R |= UART1_TX_MASK;
-        GPIO_PORTB_PCTL_R |= GPIO_PCTL_PB1_U1TX ;
-        UART1_DR_R = 0;
-        phase = 2;
-        UART1_IM_R |= UART_IM_TXIM;
+            phase = 1;
+        }
 
+        else if (phase == 1)
+        {
+            TIMER1_IMR_R &= ~TIMER_IMR_TATOIM;
+            TIMER1_CTL_R &= ~TIMER_CTL_TAEN;
+            TIMER1_TAILR_R = 7040;
+
+            GPIO_PORTB_AFSEL_R |= UART1_TX_MASK;
+            GPIO_PORTB_PCTL_R |= GPIO_PCTL_PB1_U1TX;
+            UART1_DR_R = 0;
+            phase = 2;
+            UART1_IM_R |= UART_IM_TXIM;
+
+        }
+        TIMER1_ICR_R = TIMER_ICR_TATOCINT;
     }
-    TIMER1_ICR_R = TIMER_ICR_TATOCINT;
+
 }
 
 void startDMXTX()
 {
+
     DE = 1;
     GPIO_PORTB_DATA_R = 0; //Break
     phase = 0;
     TIMER1_TAILR_R = 7040;
-
     TIMER1_CTL_R |= TIMER_CTL_TAEN;
     TIMER1_IMR_R = TIMER_IMR_TATOIM;
+
 }
 void Timer2Isr()
 {
@@ -391,7 +529,7 @@ int main(void)
     initUart0();
     initUart1();
     initEeprom();
-
+    initHIB();
     if (readEeprom(Mode) == 0xFFFFFFFF) //Device
     {
         if (readEeprom(Address) == 0xFFFFFFFF)
