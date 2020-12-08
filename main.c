@@ -160,21 +160,22 @@ bool checkCommand(USER_DATA data)
         int32_t day = getFieldInteger(&data, 7);
         alarm_time = second
                 + 60 * (minute + 60 * (hour + 24 * (mon * 30 + day)));
-        HIB_CTL_R |= 0x00000040;
-                    while (!(HIB_CTL_R & HIB_CTL_WRC))
-                        ;
-                    HIB_RTCM0_R = 30;
-                    while (!(HIB_CTL_R & HIB_CTL_WRC))
-                        ;
-                    HIB_IM_R |= HIB_IM_RTCALT0;
-                    while (!(HIB_CTL_R & HIB_CTL_WRC))
-                        ;
-                    HIB_CTL_R |= 0x00000041;
+
         if (current == 0)
         {
             alarm_table[current][0] = alarm_time;
             alarm_table[current][1] = add;
             alarm_table[current][2] = value;
+            HIB_CTL_R |= 0x00000040;
+            while (!(HIB_CTL_R & HIB_CTL_WRC))
+                ;
+            HIB_RTCM0_R = alarm_table[0][0];
+            while (!(HIB_CTL_R & HIB_CTL_WRC))
+                ;
+            HIB_IM_R |= HIB_IM_RTCALT0;
+            while (!(HIB_CTL_R & HIB_CTL_WRC))
+                ;
+            HIB_CTL_R |= 0x00000041;
 //            soonest=current;
 
         }
@@ -197,6 +198,16 @@ bool checkCommand(USER_DATA data)
 
                         }
                     }
+            HIB_CTL_R |= 0x00000040;
+            while (!(HIB_CTL_R & HIB_CTL_WRC))
+                ;
+            HIB_RTCM0_R = alarm_table[0][0];
+            while (!(HIB_CTL_R & HIB_CTL_WRC))
+                ;
+            HIB_IM_R |= HIB_IM_RTCALT0;
+            while (!(HIB_CTL_R & HIB_CTL_WRC))
+                ;
+            HIB_CTL_R |= 0x00000041;
 
         }
 
@@ -375,13 +386,21 @@ bool checkCommand(USER_DATA data)
 void alarmIsr()
 {
     HIB_IC_R |= HIB_IC_RTCALT0;
-    displayUart0("dd");
-    // DATA[(alarm_table[0][1]) - 1] = alarm_table[0][2];
-    soonest++;
+
+
+    DATA[(alarm_table[0][1]) - 1] = alarm_table[0][2];
+    for(i=0;i<current;i++)
+        {
+            for(j=0;j<3;j++)
+            {
+                alarm_table[i][j]=alarm_table[i+1][j];
+            }
+        }
+
 
     while (!(HIB_CTL_R & HIB_CTL_WRC))
         ;
-    HIB_RTCM0_R = 200;
+    HIB_RTCM0_R = alarm_table[0][0];
 //    HIB_CTL_R |= 0x00000040;
 //    while (!(HIB_CTL_R & HIB_CTL_WRC))
 //        ;
