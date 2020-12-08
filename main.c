@@ -88,7 +88,7 @@ void initHw()
     // Enable clocks
     SYSCTL_RCGCGPIO_R = SYSCTL_RCGCGPIO_R5 | SYSCTL_RCGCGPIO_R2;
     SYSCTL_RCGCTIMER_R |= (SYSCTL_RCGCTIMER_R1 | SYSCTL_RCGCTIMER_R2);
-    SYSCTL_RCGCHIB_R = SYSCTL_RCGCHIB_R0;
+
     _delay_cycles(3);
 
     GPIO_PORTC_DIR_R |= DE_MASK;
@@ -115,18 +115,18 @@ void initHw()
 }
 void initHIB()
 {
-
-
+    SYSCTL_RCGCHIB_R = SYSCTL_RCGCHIB_R0;
+    _delay_cycles(3);
     HIB_CTL_R |= HIB_CTL_CLK32EN;
     while (!(HIB_CTL_R & HIB_CTL_WRC))
-        HIB_IM_R |= HIB_IM_RTCALT0;
-
-    while (!(HIB_CTL_R & HIB_CTL_WRC));
-    NVIC_EN1_R |= 1 << (INT_HIBERNATE - 16 - 32);
-    while (!(HIB_CTL_R & 0x80000000))
         ;
-    while (!(HIB_CTL_R & HIB_CTL_WRC));
-           HIB_RTCM0_R = alarm_table[soonest][0];
+    NVIC_EN1_R |= 1 << (INT_HIBERNATE - 16 - 32);
+
+    while (!(HIB_CTL_R & HIB_CTL_WRC))
+        ;
+    HIB_IM_R |= HIB_IM_RTCALT0;
+    while (!(HIB_CTL_R & HIB_CTL_WRC))
+        ;
     HIB_CTL_R |= 0X00000041;
 }
 
@@ -160,26 +160,47 @@ bool checkCommand(USER_DATA data)
         int32_t day = getFieldInteger(&data, 7);
         alarm_time = second
                 + 60 * (minute + 60 * (hour + 24 * (mon * 30 + day)));
+        HIB_CTL_R |= 0x00000040;
+                    while (!(HIB_CTL_R & HIB_CTL_WRC))
+                        ;
+                    HIB_RTCM0_R = 30;
+                    while (!(HIB_CTL_R & HIB_CTL_WRC))
+                        ;
+                    HIB_IM_R |= HIB_IM_RTCALT0;
+                    while (!(HIB_CTL_R & HIB_CTL_WRC))
+                        ;
+                    HIB_CTL_R |= 0x00000041;
+        if (current == 0)
+        {
+            alarm_table[current][0] = alarm_time;
+            alarm_table[current][1] = add;
+            alarm_table[current][2] = value;
+//            soonest=current;
 
-        alarm_table[current][0] = alarm_time;
-        alarm_table[current][1] = add;
-        alarm_table[current][2] = value;
-        soonest=current;
-        current++;
+        }
+        if (current >= 1)
+        {
+            alarm_table[current][0] = alarm_time;
+            alarm_table[current][1] = add;
+            alarm_table[current][2] = value;
 
-        for (i = 0; i < current; i++)
-            for (j = current; j > i; j--)
-                if (alarm_table[j - 1][0] < alarm_table[j][0])
-                {
-                    for (k = 0; k < 3; k++)
+            for (i = 0; i < current; i++)
+                for (j = current; j > i; j--)
+                    if (alarm_table[j - 1][0] > alarm_table[j][0])
                     {
-                        // Swap all columns
-                        t = alarm_table[j - 1][k];
-                        alarm_table[j - 1][k] = alarm_table[j][k];
-                        alarm_table[j][k] = t;
-                    }
-                }
+                        for (k = 0; k < 3; k++)
+                        {
+                            // Swap all columns
+                            t = alarm_table[j - 1][k];
+                            alarm_table[j - 1][k] = alarm_table[j][k];
+                            alarm_table[j][k] = t;
 
+                        }
+                    }
+
+        }
+
+        current++;
         //displayUart0("table updated\n\r");
         valid = true;
         return valid;
@@ -271,17 +292,18 @@ bool checkCommand(USER_DATA data)
         sec = getFieldInteger(&data, 3);
 
         current_time = sec + 60 * (min + 60 * (hr + 24 * (month * 30 + date)));
-        while(!(HIB_CTL_R &HIB_CTL_WRC));
+        while (!(HIB_CTL_R & HIB_CTL_WRC))
+            ;
         HIB_RTCLD_R = current_time;
         valid = true;
-
-
 
         displayUart0("Time set\n\r");
         return valid;
     }
     if (isCommand(&data, "time", 0))
     {
+        while (!(HIB_CTL_R & HIB_CTL_WRC))
+            ;
         current_time = HIB_RTCC_R;
         month = current_time / (60 * 60 * 24 * 30);
         date = (current_time / (60 * 60 * 24)) - (month * 30);
@@ -294,7 +316,6 @@ bool checkCommand(USER_DATA data)
         //min1 = (current_time / (60)) - (month * (60 * 60 * 24 * 30)) - (date * (60 * 60 * 24)) - (hr * 60);
         sec = (current_time) - (month * (60 * 60 * 24 * 30))
                 - (date * (60 * 60 * 24)) - (hr * 60 * 60) - (min * 60);
-        // uint32_t time_hms=current_time-
         char hr1[16];
         sprintf(hr1, " %u", hr);
         displayUart0(hr1);
@@ -315,6 +336,8 @@ bool checkCommand(USER_DATA data)
         month = getFieldInteger(&data, 1);
         date = getFieldInteger(&data, 2);
         current_time = sec + 60 * (min + 60 * (hr + 24 * (month * 30 + date)));
+        while (!(HIB_CTL_R & HIB_CTL_WRC))
+            ;
         HIB_RTCLD_R = current_time;
         valid = true;
 
@@ -323,7 +346,8 @@ bool checkCommand(USER_DATA data)
     }
     if (isCommand(&data, "date", 0))
     {
-
+        while (!(HIB_CTL_R & HIB_CTL_WRC))
+            ;
         current_time = HIB_RTCC_R;
         month = current_time / (60 * 60 * 24 * 30);
         date = (current_time / (60 * 60 * 24)) - (month * 30);
@@ -350,24 +374,25 @@ bool checkCommand(USER_DATA data)
 
 void alarmIsr()
 {
-    displayUart0("done");
+    HIB_IC_R |= HIB_IC_RTCALT0;
+    displayUart0("dd");
+    // DATA[(alarm_table[0][1]) - 1] = alarm_table[0][2];
+    soonest++;
 
-    if (HIB_RTCC_R == HIB_RTCM0_R)
-    {
+    while (!(HIB_CTL_R & HIB_CTL_WRC))
+        ;
+    HIB_RTCM0_R = 200;
+//    HIB_CTL_R |= 0x00000040;
+//    while (!(HIB_CTL_R & HIB_CTL_WRC))
+//        ;
+//    HIB_RTCM0_R = alarm_table[soonest][0];
+//    while (!(HIB_CTL_R & HIB_CTL_WRC))
+//        ;
+//    HIB_IM_R |= HIB_IM_RTCALT0;
+//    while (!(HIB_CTL_R & HIB_CTL_WRC))
+//        ;
+//    HIB_CTL_R |= 0x00000041;
 
-        DATA[(alarm_table[soonest][1]) - 1] = alarm_table[soonest][2];
-        if (soonest > 0)
-        {
-            soonest--;
-            current--;
-        }
-        else
-        {
-            soonest = 0;
-        }
-    }
-
-    HIB_IC_R |= (HIB_IC_RTCALT0 | HIB_IC_WC);
 }
 void UART0ISR()
 {
@@ -473,7 +498,6 @@ void UART1ISR()
                 else if (start == 0)
                 {
                     UART1_IM_R &= ~UART_IM_TXIM;
-
                 }
 
             }
