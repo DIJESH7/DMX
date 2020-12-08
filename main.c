@@ -71,6 +71,7 @@ uint32_t current = 0;
 uint32_t k = 0;
 uint32_t soonest = 0;
 uint32_t add=0;
+
 //uint32_t current_hms = sec + 60 * (min + 60 * (hr));
 //-----------------------------------------------------------------------------
 // Subroutines
@@ -391,6 +392,10 @@ void alarmIsr()
 
 
     DATA[(alarm_table[0][1]) - 1] = alarm_table[0][2];
+    if(alarm_table[1][0]==0)
+       {
+           current =0;
+       }
     for(i=0;i<current;i++)
         {
             for(j=0;j<3;j++)
@@ -398,6 +403,7 @@ void alarmIsr()
                 alarm_table[i][j]=alarm_table[i+1][j];
             }
         }
+
 
 
     while (!(HIB_CTL_R & HIB_CTL_WRC))
@@ -683,10 +689,6 @@ int main(void)
     }
     while (1)
     {
-
-        //setBacklightRgbColor(0,200,0);
-
-        //waitMicrosecond(10000000);
         // Get the string from the user
         getsUart0(&data);
         PWM1_3_CMPA_R = 250;
