@@ -70,6 +70,7 @@ uint32_t t = 0;
 uint32_t current = 0;
 uint32_t k = 0;
 uint32_t soonest = 0;
+uint32_t add=0;
 //uint32_t current_hms = sec + 60 * (min + 60 * (hr));
 //-----------------------------------------------------------------------------
 // Subroutines
@@ -235,14 +236,15 @@ bool checkCommand(USER_DATA data)
 
     if (isCommand(&data, "device", 1))
     {
-        uint32_t add = getFieldInteger(&data, 1);
+        uint32_t add1 = getFieldInteger(&data, 1);
         valid = true;
         writeEeprom(Mode, 0xFFFFFFFF);
         //writeEeprom(Address, add);
-        Address = add;
-        uint32_t a = readEeprom(Address);
-        char str[50];
-        sprintf(str, "%u", a);
+        writeEeprom(Address, add1);
+        //Address = add;
+         add = readEeprom(Address);
+        char str[16];
+        sprintf(str, "%u", add);
         displayUart0(str);
     }
 
@@ -469,7 +471,7 @@ void UART1ISR()
         {
 
             rx_phase = 0;
-            PWM1_3_CMPA_R = DATA[Address];
+            PWM1_3_CMPA_R = DATA[add+1];
             /* PWM1_2_CMPB_R = 250;
              LED_TIMEOUT_OFF = 10;
              LED_RED = 1;
@@ -477,9 +479,9 @@ void UART1ISR()
              TIMER2_IMR_R = TIMER_IMR_TATOIM;
              TIMER2_CTL_R |= TIMER_CTL_TAEN;
              */
-            PWM1_2_CMPB_R = DATA[Address - 1];
+            PWM1_2_CMPB_R = DATA[add];
 
-            PWM1_3_CMPB_R = DATA[Address + 1];
+            PWM1_3_CMPB_R = DATA[add+2];
         }
         else
         {
@@ -651,13 +653,13 @@ int main(void)
     {
         if (readEeprom(Address) == 0xFFFFFFFF)
         {
-            Address = 0;
+            add = 1;
 
         }
         else if (readEeprom(Address) != 0xFFFFFFFF)
         {
 
-            Address = readEeprom(Address);
+            add = readEeprom(Address);
         }
 
         state = true;
