@@ -13,10 +13,16 @@ main.obj: /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/incl
 main.obj: /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/sys/_stdint.h
 main.obj: /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/stdbool.h
 main.obj: /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/string.h
+main.obj: /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/stdio.h
+main.obj: /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/stdarg.h
+main.obj: /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/float.h
 main.obj: ../tm4c123gh6pm.h
 main.obj: ../uart0.h
 main.obj: ../uart_input.h
 main.obj: ../uart1.h
+main.obj: ../eeprom.h
+main.obj: ../wait.h
+main.obj: ../backlight.h
 
 ../main.c: 
 /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/stdint.h: 
@@ -31,7 +37,13 @@ main.obj: ../uart1.h
 /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/sys/_stdint.h: 
 /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/stdbool.h: 
 /Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/string.h: 
+/Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/stdio.h: 
+/Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/stdarg.h: 
+/Applications/ti/ccs1011/ccs/tools/compiler/ti-cgt-arm_20.2.1.LTS/include/float.h: 
 ../tm4c123gh6pm.h: 
 ../uart0.h: 
 ../uart_input.h: 
 ../uart1.h: 
+../eeprom.h: 
+../wait.h: 
+../backlight.h: 

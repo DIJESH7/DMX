@@ -58,6 +58,8 @@ extern uint32_t __STACK_TOP;
 extern void UART0ISR(void);
 extern void UART1ISR(void);
 extern void Timer1Isr(void);
+extern void Timer2Isr(void);
+extern void alarmIsr(void);
 //*****************************************************************************
 //
 // The vector table.  Note that the proper constructs must be placed on this to
@@ -108,7 +110,7 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // Timer 0 subtimer B
     Timer1Isr,                      // Timer 1 subtimer A
     IntDefaultHandler,                      // Timer 1 subtimer B
-    IntDefaultHandler,                      // Timer 2 subtimer A
+   Timer2Isr,                      // Timer 2 subtimer A
     IntDefaultHandler,                      // Timer 2 subtimer B
     IntDefaultHandler,                      // Analog Comparator 0
     IntDefaultHandler,                      // Analog Comparator 1
@@ -128,7 +130,7 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // CAN1
     0,                                      // Reserved
     0,                                      // Reserved
-    IntDefaultHandler,                      // Hibernate
+    alarmIsr,                      // Hibernate
     IntDefaultHandler,                      // USB0
     IntDefaultHandler,                      // PWM Generator 3
     IntDefaultHandler,                      // uDMA Software Transfer
@@ -278,7 +280,7 @@ FaultISR(void)
     //
     // Enter an infinite loop.
     //
-    while(1)
+     while(1)
     {
     }
 }

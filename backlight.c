@@ -70,8 +70,8 @@ void initBacklight()
                                                     // output 4 on PWM0, gen 2a, cmpa
     PWM1_3_GENB_R = PWM_1_GENB_ACTCMPBD_ZERO | PWM_1_GENB_ACTLOAD_ONE;
                                                      // output 5 on PWM0, gen 2b, cmpb
-    PWM1_2_LOAD_R = 1024;                            // set period to 40 MHz sys clock / 2 / 1024 = 19.53125 kHz
-    PWM1_3_LOAD_R = 1024;
+    PWM1_2_LOAD_R = 255;                            // set period to 40 MHz sys clock / 2 / 1024 = 19.53125 kHz
+    PWM1_3_LOAD_R = 255;
    PWM1_INVERT_R = PWM_INVERT_PWM5INV | PWM_INVERT_PWM6INV | PWM_INVERT_PWM7INV;
                                                      // invert outputs so duty cycle increases with increasing compare values
     PWM1_2_CMPB_R = 0;                               // red off (0=always low, 1023=always high)

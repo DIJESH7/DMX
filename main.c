@@ -54,6 +54,9 @@ uint32_t LED_TIMEOUT_ON = 0;
 uint32_t LED_BLUE = 0;
 uint32_t LED_GREEN = 0;
 uint32_t LED_RED = 0;
+uint32_t LED_B = 0;
+uint32_t LED_G = 0;
+uint32_t LED_R = 0;
 bool poll_request = false;
 uint32_t current_time = 32400; //9 o'clock in the morning
 
@@ -70,8 +73,9 @@ uint32_t t = 0;
 uint32_t current = 0;
 uint32_t k = 0;
 uint32_t soonest = 0;
-uint32_t add=0;
-
+uint32_t add = 0;
+uint32_t ACK[512];
+uint32_t acked = 0;
 //uint32_t current_hms = sec + 60 * (min + 60 * (hr));
 //-----------------------------------------------------------------------------
 // Subroutines
@@ -238,15 +242,23 @@ bool checkCommand(USER_DATA data)
     if (isCommand(&data, "device", 1))
     {
         uint32_t add1 = getFieldInteger(&data, 1);
-        valid = true;
+//        PWM1_3_CMPB_R = 0;
+//        LED_TIMEOUT_OFF = 10;
+//                       LED_G = 1;
+//                       TIMER2_TAILR_R = 4000000;
+//                       TIMER2_IMR_R = TIMER_IMR_TATOIM;
+//                       TIMER2_CTL_R |= TIMER_CTL_TAEN;
         writeEeprom(Mode, 0xFFFFFFFF);
         //writeEeprom(Address, add);
         writeEeprom(Address, add1);
         //Address = add;
-         add = readEeprom(Address);
+        add = readEeprom(Address);
         char str[16];
         sprintf(str, "%u", add);
         displayUart0(str);
+        valid = true;
+        return valid;
+
     }
 
     if (isCommand(&data, "off", 0))
@@ -390,21 +402,18 @@ void alarmIsr()
 {
     HIB_IC_R |= HIB_IC_RTCALT0;
 
-
     DATA[(alarm_table[0][1]) - 1] = alarm_table[0][2];
-    if(alarm_table[1][0]==0)
-       {
-           current =0;
-       }
-    for(i=0;i<current;i++)
+    if (alarm_table[1][0] == 0)
+    {
+        current = 0;
+    }
+    for (i = 0; i < current; i++)
+    {
+        for (j = 0; j < 3; j++)
         {
-            for(j=0;j<3;j++)
-            {
-                alarm_table[i][j]=alarm_table[i+1][j];
-            }
+            alarm_table[i][j] = alarm_table[i + 1][j];
         }
-
-
+    }
 
     while (!(HIB_CTL_R & HIB_CTL_WRC))
         ;
@@ -477,17 +486,17 @@ void UART1ISR()
         {
 
             rx_phase = 0;
-            PWM1_3_CMPA_R = DATA[add+1];
-            /* PWM1_2_CMPB_R = 250;
-             LED_TIMEOUT_OFF = 10;
+            PWM1_3_CMPA_R = DATA[add + 1];
+             PWM1_2_CMPB_R = DATA[add];
+             /*LED_TIMEOUT_OFF = 10;
              LED_RED = 1;
              TIMER2_TAILR_R = 4000000;
              TIMER2_IMR_R = TIMER_IMR_TATOIM;
              TIMER2_CTL_R |= TIMER_CTL_TAEN;
              */
-            PWM1_2_CMPB_R = DATA[add];
+            //PWM1_2_CMPB_R = DATA[add];
+            PWM1_3_CMPB_R = 250;
 
-            PWM1_3_CMPB_R = DATA[add+2];
         }
         else
         {
@@ -495,6 +504,22 @@ void UART1ISR()
             rx_phase++;
 
         }
+//        if (UART1_DR_R == 0xF7)
+//        {
+//            GPIO_PORTB_DATA_R = 0; //Break
+//        phase = 0;
+//        TIMER1_TAILR_R = 7040;
+//        if (DATA[rx_phase] == 1)
+//        {
+//                DE = 1;
+//               GPIO_PORTB_DATA_R = 0; //Break
+//               phase = 0;
+//               TIMER1_TAILR_R = 7040;
+//               DE=0;
+//        }
+//
+//
+//        }
     }
 
 //step 6
@@ -530,10 +555,22 @@ void UART1ISR()
             }
         }
 
-        if (poll_request)
-        {
-
-        }
+//        if (poll_request)
+//        {
+//            uint32_t z=0;
+//
+//            for (z=0;z<512;z++)
+//            {
+//                if (z=acked)
+//                {
+//                    ACK[z]=1;
+//                }
+//                else
+//                {
+//                    ACK[z]=0;
+//                }
+//            }
+//        }
 
     }
 }
@@ -616,6 +653,28 @@ void Timer2Isr()
         LED_TIMEOUT_OFF--;
 
     }
+
+//    else if (LED_TIMEOUT_OFF == 0 && LED_B)
+//        {
+//            PWM1_3_CMPA_R = 200;
+//            LED_BLUE = 0;
+//            // TIMER2_IMR_R &= ~TIMER_IMR_TATOIM;
+//            //TIMER2_CTL_R &= ~TIMER_CTL_TAEN;
+//        }
+//        else if (LED_TIMEOUT_OFF == 0 && LED_R)
+//        {
+//            PWM1_2_CMPB_R = 200;
+//            LED_RED = 0;
+//            // TIMER2_IMR_R &= ~TIMER_IMR_TATOIM;
+//            //TIMER2_CTL_R &= ~TIMER_CTL_TAEN;
+//        }
+//        else if (LED_TIMEOUT_OFF == 0 && LED_G)
+//        {
+//            PWM1_3_CMPB_R = 200;
+//            LED_GREEN = 0;
+//            // TIMER2_IMR_R &= ~TIMER_IMR_TATOIM;
+//            //TIMER2_CTL_R &= ~TIMER_CTL_TAEN;
+//        }
     else if (LED_TIMEOUT_OFF == 0 && LED_BLUE)
     {
         PWM1_3_CMPA_R = 0;

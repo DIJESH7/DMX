@@ -63,7 +63,8 @@ void initUart1()
     UART1_CC_R = UART_CC_CS_SYSCLK;                     // use system clock (40 MHz)
     UART1_IBRD_R = 10;                                  // r = 40 MHz / (Nx115.2kHz), set floor(r)=21, where N=16
     UART1_FBRD_R = 0;                                  // round(fract(r)*64)=45
-    UART1_LCRH_R = UART_LCRH_WLEN_8 | UART_LCRH_FEN | UART_LCRH_STP2;    // configure for 8N1 w/ 16-level FIFO
+    UART1_LCRH_R = UART_LCRH_WLEN_8 | UART_LCRH_STP2;    // configure for 8N1 w/ 16-level FIFO
+    UART1_LCRH_R &= ~ UART_LCRH_FEN;
     UART1_CTL_R = UART_CTL_TXE | UART_CTL_RXE | UART_CTL_UARTEN;
                                                         // enable TX, RX, and module
     UART1_CTL_R |= UART_CTL_EOT;

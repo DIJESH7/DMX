@@ -8,12 +8,14 @@ GEN_OPTS__FLAG :=
 GEN_CMDS__FLAG := 
 
 ORDERED_OBJS += \
+"./backlight.obj" \
 "./eeprom.obj" \
 "./main.obj" \
 "./tm4c123gh6pm_startup_ccs.obj" \
 "./uart0.obj" \
 "./uart1.obj" \
 "./uart_input.obj" \
+"./wait.obj" \
 "../tm4c123gh6pm.cmd" \
 $(GEN_CMDS__FLAG) \
 -llibc.a \
@@ -157,8 +159,8 @@ Reciever.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "eeprom.obj" "main.obj" "tm4c123gh6pm_startup_ccs.obj" "uart0.obj" "uart1.obj" "uart_input.obj" 
-	-$(RM) "eeprom.d" "main.d" "tm4c123gh6pm_startup_ccs.d" "uart0.d" "uart1.d" "uart_input.d" 
+	-$(RM) "backlight.obj" "eeprom.obj" "main.obj" "tm4c123gh6pm_startup_ccs.obj" "uart0.obj" "uart1.obj" "uart_input.obj" "wait.obj" 
+	-$(RM) "backlight.d" "eeprom.d" "main.d" "tm4c123gh6pm_startup_ccs.d" "uart0.d" "uart1.d" "uart_input.d" "wait.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 
